@@ -70,6 +70,17 @@ async function run(app) {
       res.send(result);
     });
 
+    // update a book 
+    app.put('/updateBook/:id',async(req,res)=>{
+      const id = req.params.id
+      const book = req.body
+      const query = {_id:new ObjectId(id)}
+      const options = { upsert:true}
+      const updateBook = { $set : book}
+      const result = await BookList.updateOne(query,updateBook,options)
+      res.send(result)
+    })
+
     // add book on borrowed book 
     app.post('/borrow/',async(req,res)=>{
       const book = req.body
