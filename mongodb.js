@@ -2,7 +2,7 @@ require("dotenv").config();
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
 
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.mcintht.mongodb.net/?appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -23,7 +23,7 @@ const verifyToken = (req, res, next) => {
     if (error) {
       return res.send({ success: false, message: "Unauthorized Token" });
     }
-    req.user = decoded
+    req.user = decoded;
     next();
   });
 };
@@ -40,7 +40,64 @@ async function run(app) {
     console.log("You successfully connected to MongoDB!");
 
     const EleventhDB = client.db("EleventhDB");
+    const BookList = EleventhDB.collection("BookList");
+    const BorrowedBooks = EleventhDB.collection("BorrowedBooks");
 
+    // get all books
+    app.get("/books", async (req, res) => {
+      const bookCount = await BookList.countDocuments();
+      if (!bookCount) {
+        res.send({data:[]})
+      } else {
+        const cursor =  BookList.find()
+        const totalBooks = await cursor.toArray()
+        res.send({data:totalBooks}) 
+      }
+    });
+
+    // get a book 
+    app.get('/book/:id',async(req,res)=>{
+      const id = req.params.id
+      const query = {_id: new ObjectId(id)} 
+      const book = await BookList.findOne(query)
+      res.send(book)
+    })
+
+    // add book
+    app.post("/addbook", async (req, res) => {
+      const book = req.body;
+      const result = await BookList.insertOne(book);
+      res.send(result);
+    });
+
+    // add book on borrowed book 
+    app.post('/borrow/',async(req,res)=>{
+      const book = req.body
+      const {book_id} = book 
+      const result = await BorrowedBooks.insertOne(book)
+      const updatedResult = await BookList.updateOne({_id: new ObjectId(book_id)},{$inc:{quantity:-1}})
+      res.send(updatedResult)
+    })
+
+    // remove book from borrowed book 
+    app.delete('/return',async(req,res)=>{
+      const body = req.body
+      const {book_id,_id} = body
+      const result = await  BorrowedBooks.deleteOne({_id:new ObjectId(_id)})
+      const updatedResult = await BookList.updateOne({_id: new ObjectId(book_id)},{$inc:{quantity:+1}})
+      res.send(updatedResult)
+    }) 
+
+    // borrowed book 
+    app.get('/borrowedbook/:email',async(req,res)=> {
+      const email = req.params.email
+      const query = {email:email}
+      const cursor = BorrowedBooks.find(query)
+      const Borrowed = await cursor.toArray()
+      res.send(Borrowed)
+    })
+    
+    // create jwt 
     app.post("/jwt", (req, res) => {
       const body = req.body;
       const token = jwt.sign(body, process.env.CLIENT_SECRET, {
@@ -54,7 +111,8 @@ async function run(app) {
         })
         .send({ success: true });
     });
-
+    
+    // clear cookie 
     app.post("/jwtout", verifyToken, (req, res) => {
       res
         .clearCookie("token", {
@@ -65,7 +123,7 @@ async function run(app) {
         .send({ seccess: true });
     });
 
-    // app.get("users", async (req, res) => {});
+    // app.get("/users", async (req, res) => {});
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
@@ -73,5 +131,3 @@ async function run(app) {
 }
 
 module.exports = { run };
-
-
